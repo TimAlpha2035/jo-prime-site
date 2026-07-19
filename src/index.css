@@ -1,0 +1,11 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Nunito Sans', sans-serif;
+  color: #1C2833;
+  -webkit-font-smoothing: antialiased;
+}
+html { scroll-behavior: smooth; }
