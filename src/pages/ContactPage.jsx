@@ -11,6 +11,7 @@ export default function ContactPage() {
   const [form, setForm] = useState(INITIAL)
   const [success, setSuccess] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [honeypot, setHoneypot] = useState('')
   const [error, setError] = useState('')
   const { telephone, email, adresse, horaires, whatsapp } = useParametresSite()
 
@@ -20,8 +21,9 @@ export default function ContactPage() {
 
   async function handleSubmit(e) {
     e.preventDefault()
-    setSubmitting(true)
     setError('')
+    if (honeypot) { setSuccess(true); return } // robot : on fait semblant
+    setSubmitting(true)
     try {
       // 1. Enregistrer dans Supabase
       await addMessageContact({
@@ -90,11 +92,16 @@ export default function ContactPage() {
                 </div>
               ) : (
                 <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+                  {/* Anti-spam : champ invisible, rempli uniquement par les robots */}
+                  <input type="text" name="website" tabIndex={-1} autoComplete="off" aria-hidden="true"
+                    value={honeypot} onChange={e => setHoneypot(e.target.value)}
+                    style={{ position: 'absolute', left: '-9999px', width: 1, height: 1, opacity: 0 }} />
+
                   <div>
                     <label className="font-nunito text-sm font-semibold text-jp-graphite mb-1 block">
                       Nom complet <span className="text-jp-blue2">*</span>
                     </label>
-                    <input name="nom" required value={form.nom} onChange={handleChange}
+                    <input maxLength={200} name="nom" required value={form.nom} onChange={handleChange}
                       className={INPUT_CLS} placeholder="Votre nom complet" />
                   </div>
 
@@ -102,7 +109,7 @@ export default function ContactPage() {
                     <label className="font-nunito text-sm font-semibold text-jp-graphite mb-1 block">
                       Email <span className="text-jp-blue2">*</span>
                     </label>
-                    <input name="email" type="email" required value={form.email} onChange={handleChange}
+                    <input maxLength={200} name="email" type="email" required value={form.email} onChange={handleChange}
                       className={INPUT_CLS} placeholder="votre@email.com" />
                   </div>
 
@@ -110,7 +117,7 @@ export default function ContactPage() {
                     <label className="font-nunito text-sm font-semibold text-jp-graphite mb-1 block">
                       Sujet <span className="text-jp-blue2">*</span>
                     </label>
-                    <input name="sujet" required value={form.sujet} onChange={handleChange}
+                    <input maxLength={200} name="sujet" required value={form.sujet} onChange={handleChange}
                       className={INPUT_CLS} placeholder="Objet de votre message" />
                   </div>
 
@@ -118,7 +125,7 @@ export default function ContactPage() {
                     <label className="font-nunito text-sm font-semibold text-jp-graphite mb-1 block">
                       Message <span className="text-jp-blue2">*</span>
                     </label>
-                    <textarea name="message" required rows={5} value={form.message} onChange={handleChange}
+                    <textarea maxLength={3000} name="message" required rows={5} value={form.message} onChange={handleChange}
                       className={INPUT_CLS + ' resize-none'} placeholder="Votre message…" />
                   </div>
 

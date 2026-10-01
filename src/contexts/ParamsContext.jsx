@@ -12,6 +12,13 @@ const DEFAULTS = {
   afficher_prix: 'true',
 }
 
+// Défense en profondeur : ne jamais injecter dans un href une valeur non attendue
+const httpsOnly = v => (typeof v === 'string' && /^https:\/\/[^\s"'<>]+$/.test(v) ? v : '')
+const digitsOnly = v => String(v ?? '').replace(/\D/g, '')
+function sanitize(p) {
+  return { ...p, facebook: httpsOnly(p.facebook), instagram: httpsOnly(p.instagram), whatsapp: digitsOnly(p.whatsapp) }
+}
+
 const ParamsContext = createContext(DEFAULTS)
 
 export function ParamsProvider({ children }) {
@@ -19,7 +26,7 @@ export function ParamsProvider({ children }) {
 
   useEffect(() => {
     getParametres()
-      .then(data => setParams({ ...DEFAULTS, ...data }))
+      .then(data => setParams(sanitize({ ...DEFAULTS, ...data })))
       .catch(() => {})
   }, [])
 

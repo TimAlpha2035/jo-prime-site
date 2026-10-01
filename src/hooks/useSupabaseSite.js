@@ -3,35 +3,30 @@ import { supabase } from '../lib/supabase'
 const FUNCTIONS_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`
 const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
 
-// Les demandes/messages sont protégés côté base (RLS) : la lecture et la
-// mise à jour du statut passent par la fonction admin-leads, qui vérifie
-// la clé admin plutôt que d'exposer ces tables en lecture publique.
-async function callAdminLeads(path, options = {}) {
-  const adminKey = sessionStorage.getItem('admin_key') || ''
-  const res = await fetch(`${FUNCTIONS_URL}/admin-leads${path}`, {
-    ...options,
+// Toutes les opérations d'écriture admin et la lecture des demandes/messages
+// passent par la fonction admin-content, qui vérifie la clé admin côté serveur
+// (secret ADMIN_KEY). Les tables sont protégées par RLS : l'anon key ne peut
+// que lire le contenu public et insérer des devis/messages.
+export async function adminCall(action, payload = {}, adminKey) {
+  const key = adminKey ?? sessionStorage.getItem('admin_key') ?? ''
+  const res = await fetch(`${FUNCTIONS_URL}/admin-content`, {
+    method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${ANON_KEY}`,
-      'x-admin-key': adminKey,
-      ...options.headers,
+      apikey: ANON_KEY,
+      'x-admin-key': key,
     },
+    body: JSON.stringify({ action, payload }),
   })
-  const data = await res.json()
-  if (!res.ok) throw new Error(data.error || 'Erreur admin-leads')
-  return data
-}
-
-// ── UTILS ─────────────────────────────────────────────────────────────────────
-function extractStoragePath(publicUrl) {
-  try {
-    const marker = '/object/public/jo-prime-images/'
-    const idx = publicUrl.indexOf(marker)
-    if (idx === -1) return null
-    return publicUrl.slice(idx + marker.length)
-  } catch {
-    return null
+  let data = {}
+  try { data = await res.json() } catch { /* réponse non JSON */ }
+  if (res.status === 401) {
+    sessionStorage.removeItem('admin_auth')
+    sessionStorage.removeItem('admin_key')
   }
+  if (!res.ok || data.success === false) throw new Error(data.error || 'Erreur admin')
+  return data.data
 }
 
 // ── PRODUITS ──────────────────────────────────────────────────────────────────
@@ -45,32 +40,13 @@ export async function getProduits() {
 }
 
 export async function updateProduit(slug, data) {
-  const { error } = await supabase
-    .from('produits')
-    .update(data)
-    .eq('slug', slug)
-  if (error) throw error
-}
-
-export async function uploadImageProduit(slug, file) {
-  const ext = file.name.split('.').pop().toLowerCase()
-  const path = `produits/${slug}/principale.${ext}`
-
-  const { error: uploadError } = await supabase.storage
-    .from('jo-prime-images')
-    .upload(path, file, { upsert: true, contentType: file.type })
-
-  if (uploadError) throw uploadError
-
-  const { data } = supabase.storage
-    .from('jo-prime-images')
-    .getPublicUrl(path)
-
-  return data.publicUrl
+  await adminCall('update_produit', { slug, data })
 }
 
 // ── RÉALISATIONS ──────────────────────────────────────────────────────────────
 export async function getRealisations(onlyActifs = false) {
+  // L'admin voit aussi les réalisations masquées (la RLS publique les cache)
+  if (!onlyActifs) return adminCall('list_realisations')
   let query = supabase
     .from('realisations')
     .select('*')
@@ -85,53 +61,15 @@ export async function getRealisations(onlyActifs = false) {
 }
 
 export async function addRealisation(data) {
-  const { data: inserted, error } = await supabase
-    .from('realisations')
-    .insert(data)
-    .select()
-    .single()
-  if (error) throw error
-  return inserted
+  return adminCall('add_realisation', { data })
 }
 
 export async function updateRealisation(id, data) {
-  const { error } = await supabase
-    .from('realisations')
-    .update(data)
-    .eq('id', id)
-  if (error) throw error
+  await adminCall('update_realisation', { id, data })
 }
 
-export async function deleteRealisation(id, imageUrl) {
-  if (imageUrl) {
-    const path = extractStoragePath(imageUrl)
-    if (path) {
-      await supabase.storage.from('jo-prime-images').remove([path])
-    }
-  }
-  const { error } = await supabase
-    .from('realisations')
-    .delete()
-    .eq('id', id)
-  if (error) throw error
-}
-
-export async function uploadImageRealisation(file) {
-  const timestamp = Date.now()
-  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
-  const path = `realisations/${timestamp}-${safeName}`
-
-  const { error: uploadError } = await supabase.storage
-    .from('jo-prime-images')
-    .upload(path, file, { contentType: file.type })
-
-  if (uploadError) throw uploadError
-
-  const { data } = supabase.storage
-    .from('jo-prime-images')
-    .getPublicUrl(path)
-
-  return data.publicUrl
+export async function deleteRealisation(id) {
+  await adminCall('delete_realisation', { id })
 }
 
 // ── VARIANTES ─────────────────────────────────────────────────────────────────
@@ -163,29 +101,15 @@ export async function getVariantesGroupees() {
 }
 
 export async function updateVariante(id, data) {
-  const { error } = await supabase
-    .from('variantes')
-    .update(data)
-    .eq('id', id)
-  if (error) throw error
+  await adminCall('update_variante', { id, data })
 }
 
 export async function addVariante(data) {
-  const { data: inserted, error } = await supabase
-    .from('variantes')
-    .insert(data)
-    .select()
-    .single()
-  if (error) throw error
-  return inserted
+  return adminCall('add_variante', { data })
 }
 
 export async function deleteVariante(id) {
-  const { error } = await supabase
-    .from('variantes')
-    .delete()
-    .eq('id', id)
-  if (error) throw error
+  await adminCall('delete_variante', { id })
 }
 
 // ── DEMANDES DEVIS ────────────────────────────────────────────────────────────
@@ -197,14 +121,11 @@ export async function addDemandeDevis(data) {
 }
 
 export async function getDemandes() {
-  return callAdminLeads('?table=demandes_devis')
+  return adminCall('list_leads', { table: 'demandes_devis' })
 }
 
 export async function updateDemandeStatut(id, statut) {
-  await callAdminLeads('', {
-    method: 'PATCH',
-    body: JSON.stringify({ table: 'demandes_devis', id, statut }),
-  })
+  await adminCall('update_lead_statut', { table: 'demandes_devis', id, statut })
 }
 
 // ── MESSAGES CONTACT ──────────────────────────────────────────────────────────
@@ -216,14 +137,11 @@ export async function addMessageContact(data) {
 }
 
 export async function getMessages() {
-  return callAdminLeads('?table=messages_contact')
+  return adminCall('list_leads', { table: 'messages_contact' })
 }
 
 export async function updateMessageStatut(id, statut) {
-  await callAdminLeads('', {
-    method: 'PATCH',
-    body: JSON.stringify({ table: 'messages_contact', id, statut }),
-  })
+  await adminCall('update_lead_statut', { table: 'messages_contact', id, statut })
 }
 
 // ── PARAMÈTRES ────────────────────────────────────────────────────────────────
@@ -241,8 +159,5 @@ export async function getParametres() {
 }
 
 export async function updateParametre(cle, valeur) {
-  const { error } = await supabase
-    .from('parametres_site')
-    .upsert({ cle, valeur }, { onConflict: 'cle' })
-  if (error) throw error
+  await adminCall('update_parametre', { cle, valeur })
 }

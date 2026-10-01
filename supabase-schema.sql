@@ -120,20 +120,47 @@ INSERT INTO parametres_site (cle, valeur) VALUES
   ('afficher_prix', 'true')
 ON CONFLICT (cle) DO NOTHING;
 
--- ── DÉSACTIVER RLS ────────────────────────────────────────
--- (l'admin n'utilise pas Supabase Auth — on désactive les
---  restrictions pour que l'anon key puisse lire et écrire)
-ALTER TABLE produits          DISABLE ROW LEVEL SECURITY;
-ALTER TABLE variantes         DISABLE ROW LEVEL SECURITY;
-ALTER TABLE realisations      DISABLE ROW LEVEL SECURITY;
-ALTER TABLE parametres_site   DISABLE ROW LEVEL SECURITY;
-ALTER TABLE demandes_devis    DISABLE ROW LEVEL SECURITY;
-ALTER TABLE messages_contact  DISABLE ROW LEVEL SECURITY;
+-- ── ROW LEVEL SECURITY ────────────────────────────────────
+-- Le contenu public est lisible par tous ; TOUTE écriture admin passe par la
+-- fonction Edge "admin-content" (service role + secret ADMIN_KEY).
+-- Les visiteurs peuvent seulement INSÉRER un devis / un message.
+ALTER TABLE produits          ENABLE ROW LEVEL SECURITY;
+ALTER TABLE variantes         ENABLE ROW LEVEL SECURITY;
+ALTER TABLE realisations      ENABLE ROW LEVEL SECURITY;
+ALTER TABLE parametres_site   ENABLE ROW LEVEL SECURITY;
+ALTER TABLE demandes_devis    ENABLE ROW LEVEL SECURITY;
+ALTER TABLE messages_contact  ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "lecture publique produits"     ON produits;
+DROP POLICY IF EXISTS "lecture publique variantes"    ON variantes;
+DROP POLICY IF EXISTS "lecture publique realisations" ON realisations;
+DROP POLICY IF EXISTS "lecture publique parametres"   ON parametres_site;
+DROP POLICY IF EXISTS "public can submit devis"       ON demandes_devis;
+DROP POLICY IF EXISTS "public can submit contact"     ON messages_contact;
+
+CREATE POLICY "lecture publique produits"     ON produits        FOR SELECT TO public USING (true);
+CREATE POLICY "lecture publique variantes"    ON variantes       FOR SELECT TO public USING (true);
+CREATE POLICY "lecture publique realisations" ON realisations    FOR SELECT TO public USING (actif = true);
+CREATE POLICY "lecture publique parametres"   ON parametres_site FOR SELECT TO public USING (true);
+CREATE POLICY "public can submit devis"   ON demandes_devis   FOR INSERT TO anon WITH CHECK (statut = 'nouveau');
+CREATE POLICY "public can submit contact" ON messages_contact FOR INSERT TO anon WITH CHECK (statut = 'nouveau');
+
+-- Limites de taille (anti-abus) sur les formulaires publics
+ALTER TABLE demandes_devis DROP CONSTRAINT IF EXISTS demandes_devis_len;
+ALTER TABLE demandes_devis ADD CONSTRAINT demandes_devis_len CHECK (
+  length(prenom) <= 200 AND length(nom) <= 200 AND length(email) <= 320 AND
+  length(telephone) <= 50 AND length(coalesce(entreprise,'')) <= 200 AND
+  length(service) <= 200 AND length(quantite) <= 200 AND
+  length(coalesce(format,'')) <= 200 AND length(delai) <= 200 AND
+  length(description) <= 5000) NOT VALID;
+ALTER TABLE messages_contact DROP CONSTRAINT IF EXISTS messages_contact_len;
+ALTER TABLE messages_contact ADD CONSTRAINT messages_contact_len CHECK (
+  length(nom) <= 200 AND length(email) <= 320 AND length(sujet) <= 300 AND
+  length(message) <= 5000) NOT VALID;
 
 -- ── BUCKET STORAGE ────────────────────────────────────────
 -- Faites ceci manuellement dans l'interface Supabase :
 -- Storage → New bucket → Nom : "jo-prime-images" → cocher "Public bucket" → Create
--- Puis dans Policies → New policy → "Give users access to own folder" → Allow insert + select for anon
 --
 -- OU collez ces requêtes SQL :
 INSERT INTO storage.buckets (id, name, public)
@@ -158,56 +185,8 @@ BEGIN
   END IF;
 END $$;
 
--- Politique upload (anon peut uploader)
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies
-    WHERE tablename = 'objects'
-      AND schemaname = 'storage'
-      AND policyname = 'jo-prime-images anon upload'
-  ) THEN
-    EXECUTE $policy$
-      CREATE POLICY "jo-prime-images anon upload"
-        ON storage.objects FOR INSERT
-        TO anon
-        WITH CHECK (bucket_id = 'jo-prime-images');
-    $policy$;
-  END IF;
-END $$;
-
--- Politique update (anon peut upsert)
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies
-    WHERE tablename = 'objects'
-      AND schemaname = 'storage'
-      AND policyname = 'jo-prime-images anon update'
-  ) THEN
-    EXECUTE $policy$
-      CREATE POLICY "jo-prime-images anon update"
-        ON storage.objects FOR UPDATE
-        TO anon
-        USING (bucket_id = 'jo-prime-images');
-    $policy$;
-  END IF;
-END $$;
-
--- Politique delete (anon peut supprimer)
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies
-    WHERE tablename = 'objects'
-      AND schemaname = 'storage'
-      AND policyname = 'jo-prime-images anon delete'
-  ) THEN
-    EXECUTE $policy$
-      CREATE POLICY "jo-prime-images anon delete"
-        ON storage.objects FOR DELETE
-        TO anon
-        USING (bucket_id = 'jo-prime-images');
-    $policy$;
-  END IF;
-END $$;
+-- Aucune politique d'écriture pour anon : les images sont stockées en base
+-- (data URL) ou envoyées via une URL signée générée par la fonction Edge.
+DROP POLICY IF EXISTS "jo-prime-images anon upload" ON storage.objects;
+DROP POLICY IF EXISTS "jo-prime-images anon update" ON storage.objects;
+DROP POLICY IF EXISTS "jo-prime-images anon delete" ON storage.objects;

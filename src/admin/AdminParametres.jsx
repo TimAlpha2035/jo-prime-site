@@ -17,8 +17,6 @@ export default function AdminParametres() {
   const [params, setParams] = useState({})
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [newPassword, setNewPassword] = useState('')
-  const [savingPwd, setSavingPwd] = useState(false)
   const { toast, showToast, hideToast } = useToast()
 
   useEffect(() => { load() }, [])
@@ -53,21 +51,6 @@ export default function AdminParametres() {
     } finally {
       setSaving(false)
     }
-  }
-
-  function handlePasswordSave(e) {
-    e.preventDefault()
-    if (!newPassword || newPassword.length < 6) {
-      showToast('Le mot de passe doit faire au moins 6 caractères.', 'error')
-      return
-    }
-    setSavingPwd(true)
-    localStorage.setItem('admin_password', newPassword)
-    setTimeout(() => {
-      setNewPassword('')
-      setSavingPwd(false)
-      showToast('Mot de passe mis à jour ! Effectif à la prochaine connexion.')
-    }, 300)
   }
 
   return (
@@ -127,7 +110,7 @@ export default function AdminParametres() {
                     {/* Bouton ouvrir URL */}
                     {(cle === 'facebook' || cle === 'instagram') && params[cle] && (
                       <a
-                        href={params[cle]}
+                        href={/^https:\/\//.test(params[cle]) ? params[cle] : undefined}
                         target="_blank"
                         rel="noopener noreferrer"
                         title="Ouvrir le lien"
@@ -190,33 +173,10 @@ export default function AdminParametres() {
             <Key size={18} className="text-jp-blue" />
             Mot de passe administrateur
           </h2>
-          <p className="font-nunito text-jp-gray2 text-xs mb-5">
-            Le nouveau mot de passe sera effectif à la prochaine connexion.
+          <p className="font-nunito text-jp-gray2 text-sm leading-relaxed">
+            Le mot de passe est stocké de façon sécurisée côté serveur. Pour le changer :
+            Supabase → Edge Functions → Secrets → modifier <code className="font-mono text-xs bg-jp-gray px-1 rounded">ADMIN_KEY</code>.
           </p>
-
-          <form onSubmit={handlePasswordSave} className="space-y-4">
-            <div>
-              <label className="font-nunito text-sm font-semibold text-jp-graphite mb-1.5 block">
-                Nouveau mot de passe
-              </label>
-              <input
-                type="password"
-                value={newPassword}
-                onChange={e => setNewPassword(e.target.value)}
-                minLength={6}
-                className="w-full border border-jp-gray rounded-lg px-4 py-2.5 font-nunito text-sm focus:outline-none focus:border-jp-blue"
-                placeholder="Minimum 6 caractères"
-              />
-            </div>
-            <button
-              type="submit"
-              disabled={savingPwd || !newPassword}
-              className="flex items-center gap-2 bg-jp-graphite text-white font-nunito font-bold rounded-xl px-6 py-3 hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <Key size={17} />
-              {savingPwd ? 'Mise à jour…' : 'Mettre à jour le mot de passe'}
-            </button>
-          </form>
         </div>
       </div>
 

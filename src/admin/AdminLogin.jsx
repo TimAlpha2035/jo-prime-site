@@ -1,8 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Eye, EyeOff, Lock } from 'lucide-react'
-
-const DEFAULT_PASSWORD = 'joprime2026admin'
+import { adminCall } from '../hooks/useSupabaseSite'
 
 export default function AdminLogin() {
   const [password, setPassword] = useState('')
@@ -11,25 +10,23 @@ export default function AdminLogin() {
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault()
     setLoading(true)
     setError('')
-
-    const stored = localStorage.getItem('admin_password') || DEFAULT_PASSWORD
-
-    setTimeout(() => {
-      if (password === stored) {
-        sessionStorage.setItem('admin_auth', 'true')
-        // Clé technique envoyée à la fonction admin-leads — indépendante du mot de
-        // passe personnalisable ci-dessus, pour ne jamais désynchroniser l'accès aux demandes.
-        sessionStorage.setItem('admin_key', DEFAULT_PASSWORD)
-        navigate('/admin/dashboard', { replace: true })
-      } else {
-        setError('Mot de passe incorrect. Veuillez réessayer.')
-        setLoading(false)
-      }
-    }, 400)
+    try {
+      // Le mot de passe est vérifié côté serveur (secret ADMIN_KEY)
+      await adminCall('login', {}, password)
+      sessionStorage.setItem('admin_auth', 'true')
+      sessionStorage.setItem('admin_key', password)
+      navigate('/admin/dashboard', { replace: true })
+    } catch (err) {
+      const unauthorized = /autoris/i.test(err.message)
+      setError(unauthorized
+        ? 'Mot de passe incorrect. Veuillez réessayer.'
+        : 'Connexion impossible pour le moment. Réessayez dans un instant.')
+      setLoading(false)
+    }
   }
 
   return (
