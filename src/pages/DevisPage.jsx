@@ -36,6 +36,7 @@ export default function DevisPage() {
   const [form, setForm] = useState(INITIAL)
   const [success, setSuccess] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [honeypot, setHoneypot] = useState('')
   const [error, setError] = useState('')
   const { whatsapp, telephone, email, horaires } = useParametresSite()
 
@@ -46,8 +47,9 @@ export default function DevisPage() {
 
   async function handleSubmit(e) {
     e.preventDefault()
-    setSubmitting(true)
     setError('')
+    if (honeypot) { setSuccess(true); return } // robot : on fait semblant
+    setSubmitting(true)
     try {
       // 1. Enregistrer dans Supabase
       await addDemandeDevis({
@@ -127,24 +129,29 @@ export default function DevisPage() {
             {/* ── Formulaire ── */}
             <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm p-8">
               <form onSubmit={handleSubmit} className="space-y-5" noValidate>
+                  {/* Anti-spam : champ invisible, rempli uniquement par les robots */}
+                  <input type="text" name="website" tabIndex={-1} autoComplete="off" aria-hidden="true"
+                    value={honeypot} onChange={e => setHoneypot(e.target.value)}
+                    style={{ position: 'absolute', left: '-9999px', width: 1, height: 1, opacity: 0 }} />
+
                 <h2 className="font-nunito font-bold text-xl text-jp-graphite">Vos informations</h2>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <Label htmlFor="prenom">Prénom</Label>
-                    <input id="prenom" name="prenom" required value={form.prenom} onChange={handleChange}
+                    <input maxLength={200} id="prenom" name="prenom" required value={form.prenom} onChange={handleChange}
                       className={INPUT_CLS} placeholder="Votre prénom" />
                   </div>
                   <div>
                     <Label htmlFor="nom">Nom</Label>
-                    <input id="nom" name="nom" required value={form.nom} onChange={handleChange}
+                    <input maxLength={200} id="nom" name="nom" required value={form.nom} onChange={handleChange}
                       className={INPUT_CLS} placeholder="Votre nom" />
                   </div>
                 </div>
 
                 <div>
                   <Label htmlFor="email">Email</Label>
-                  <input id="email" name="email" type="email" required value={form.email} onChange={handleChange}
+                  <input maxLength={200} id="email" name="email" type="email" required value={form.email} onChange={handleChange}
                     className={INPUT_CLS} placeholder="votre@email.com" />
                 </div>
 
@@ -154,7 +161,7 @@ export default function DevisPage() {
                     <span className="border border-r-0 border-jp-gray rounded-l-lg px-3 flex items-center bg-jp-cyan-l font-nunito text-sm text-jp-gray2 shrink-0">
                       +224
                     </span>
-                    <input id="telephone" name="telephone" type="tel" required value={form.telephone} onChange={handleChange}
+                    <input maxLength={200} id="telephone" name="telephone" type="tel" required value={form.telephone} onChange={handleChange}
                       className="flex-1 border border-jp-gray rounded-r-lg px-4 py-2.5 font-nunito text-sm focus:outline-none focus:border-jp-cyan transition-colors"
                       placeholder="XXX XXX XXX" />
                   </div>
@@ -162,7 +169,7 @@ export default function DevisPage() {
 
                 <div>
                   <Label htmlFor="entreprise" optional>Entreprise</Label>
-                  <input id="entreprise" name="entreprise" value={form.entreprise} onChange={handleChange}
+                  <input maxLength={200} id="entreprise" name="entreprise" value={form.entreprise} onChange={handleChange}
                     className={INPUT_CLS} placeholder="Nom de votre entreprise" />
                 </div>
 
@@ -179,13 +186,13 @@ export default function DevisPage() {
 
                 <div>
                   <Label htmlFor="quantite">Quantité souhaitée</Label>
-                  <input id="quantite" name="quantite" required value={form.quantite} onChange={handleChange}
+                  <input maxLength={200} id="quantite" name="quantite" required value={form.quantite} onChange={handleChange}
                     className={INPUT_CLS} placeholder="Ex : 500 exemplaires" />
                 </div>
 
                 <div>
                   <Label htmlFor="format" optional>Format / Dimensions</Label>
-                  <input id="format" name="format" value={form.format} onChange={handleChange}
+                  <input maxLength={200} id="format" name="format" value={form.format} onChange={handleChange}
                     className={INPUT_CLS} placeholder="Ex : A4, 85×55 mm, 2×1 m…" />
                 </div>
 
@@ -202,7 +209,7 @@ export default function DevisPage() {
 
                 <div>
                   <Label htmlFor="description">Décrivez votre projet</Label>
-                  <textarea id="description" name="description" required rows={4} value={form.description} onChange={handleChange}
+                  <textarea maxLength={2000} id="description" name="description" required rows={4} value={form.description} onChange={handleChange}
                     className={INPUT_CLS + ' resize-none'}
                     placeholder="Décrivez votre projet, vos besoins, vos préférences de couleurs, finitions…" />
                 </div>

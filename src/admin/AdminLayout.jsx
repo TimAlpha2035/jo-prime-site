@@ -38,6 +38,7 @@ function SidebarContent({ onClose }) {
 
   function handleLogout() {
     sessionStorage.removeItem('admin_auth')
+    sessionStorage.removeItem('admin_key')
     navigate('/admin/login', { replace: true })
   }
 
